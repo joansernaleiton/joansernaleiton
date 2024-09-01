@@ -1,0 +1,179 @@
+---
+title: Preventing Memory Leaks in RxJS
+author: Joan Serna Leiton
+pubDatetime: 2024-08-31T17:00:31Z
+slug: preventing-memory-leaks-rxjs
+ogImage: ../../assets/images/preventing_memory_leaks_rxjs/0.svg
+featured: false
+draft: false
+tags:
+  - Angular
+  - RxJS
+  - Memory Leaks
+description: Memory leaks can be a major issue when we do not give it adequate importance, when writing reactive applications, we must make sure that the events we listen for are handled in the best way, that we are not listening forever for these events, that their listening stops at some point.
+---
+
+import { Image } from "astro:assets";
+import firstImage from "../../assets/images/preventing_memory_leaks_rxjs/0.svg";
+import secondImage from "../../assets/images/preventing_memory_leaks_rxjs/1.png";
+
+# Preventing Memory Leaks in RxJS
+
+<br></br>
+<br></br>
+
+<Image src={firstImage} alt="Confusing" />
+
+<br></br>
+<br></br>
+
+## Choosing `takeUntil` or `unsubscribe` over `first` or `take`
+
+<br></br>
+
+Memory leaks can be a major issue when we do not give it adequate importance, when writing reactive applications, we must make sure that the events we listen for are handled in the best way, that we are not listening forever for these events, that their listening stops at some point.
+
+In angular we use RxJS, a library that uses the observer pattern to give us a model of subscriptions and observables to handle reactivity.
+
+it also provides us the ability to manage data flows, control the time, the structure of the data and a long etc that we will not detail in this article, one of the key capabilities in the observer pattern, is the ability to unsubscribe to listen to an event, I do not want to listen forever, I want to listen from a certain time to a certain time
+
+Another key concept but this time introduced by RxJS are the operators, it is something essential in RxJS, they are immutable functions, that is to say, they do not modify the original observable, but they return a new observable, this allows to build observable data flows in a functional and declarative way.
+
+So we could use an operator to complete the execution of an observable and thus stop listening to it ?
+
+Yes and no!
+
+![Confusing](https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExYXBmcW9pcnQ4MmhpZzVjc2RibHhuaTc1YmdsdHV6aDA4MjExYmRpMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7btPCcdNniyf0ArS/giphy-downsized.gif)
+
+If we use operators we can stop listening to them, but… what if the observable never emits and the operator is not executed ? what if there is a delay for its first emission and then we go to another component it will continue listening ?
+
+The answer is yes, and here we have a performance problem, a memory leak!
+
+let’s see an example in code
+
+![Coding!](https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExZXFsZmlsODFma3B1emJobHZ1YTU3ZmFsYnlxc3hoYWxxNThlcTBoeSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Dh5q0sShxgp13DwrvG/giphy-downsized.gif)
+
+Let’s create two components in our angular application, having in total 3 components: appComponent, ChildOneComponent, ChildTwoComponent
+
+<Image src={secondImage} alt="Structured components" />
+**ChildOneComponent** in ChildOneComponent we will use an operator _first_ to
+complete the observable and stop listening when it emits the first event
+
+```ts
+export class ConfigService {
+  getLang(): Observable<string> {
+    return of("ES").pipe(delay(10000));
+  }
+}
+```
+
+```ts
+export class ChildOneComponent implements OnInit {
+  timer$: Observable<number> = of(0);
+  constructor(private readonly configService: ConfigService) {}
+
+  ngOnInit(): void {
+    this.timer$ = timer(1000, 1000);
+
+    this.configService
+      .getLang()
+      .pipe(first())
+      .subscribe(lang => {
+        console.log("childOne", { lang });
+      });
+  }
+
+  ngOnDestroy(): void {
+    console.log("destroy child one component");
+  }
+}
+```
+
+**ChildTwoComponent**
+
+in ChildTwoComponent we will use an operator to complete the observable and stop listening when it emits the first event, but we also join one of the capabilities that RxJS gives us to unsubscribe when the component is destroyed, in this way we ensure that when the component is destroyed, we will stop listening.
+
+```ts
+export class ConfigService {
+  getLang(): Observable<string> {
+    return of("ES").pipe(delay(10000));
+  }
+}
+```
+
+```ts
+export class ChildTwoComponent implements OnInit, OnDestroy {
+  timer$: Observable<number> = of(0);
+
+  constructor(private readonly configService: ConfigService) {}
+
+  subscriptions: Subscription = new Subscription();
+
+  ngOnInit(): void {
+    this.timer$ = timer(1000, 1000);
+
+    this.subscriptions.add(
+      this.configService
+        .getLang()
+        .pipe(first())
+        .subscribe(lang => {
+          console.log("childTwo", { lang });
+        })
+    );
+  }
+
+  ngOnDestroy(): void {
+    console.log("destroy child two component");
+    this.subscriptions.unsubscribe();
+  }
+}
+```
+
+**ChildOneComponent**
+
+now we are going to make a small demo, as even using the first operator, that helps us when the first event is emitted to complete the observable, but this does not guarantee us, that we stop listening to that event, causing problems of memory leaks.
+
+We will see that even if the component is destroyed, the observable is still heard.
+
+<img
+  src="/assets/preventing_memory_leaks_rxjs/2.gif"
+  alt="example of memory leaks"
+/>
+**ChildTwoComponent**
+
+on the contrary if we use the capabilities of RxJS to unsubscribe manually, this will guarantee that if the component is destroyed we will cancel the observable stopping the listening, avoiding performance problems.
+
+<img
+  src="/assets/preventing_memory_leaks_rxjs/3.gif"
+  alt="example fixed of memory leaks"
+/>
+we will see that when the component is destroyed, the observable will not be
+emitted anymore, because it has been cancelled.
+
+Tip:  
+Using the takeUntil operator and theOnDestroy lifecycle we can also create a strategy to unsubscribe from the observable.
+
+```ts
+export class ChildOneComponent implements OnInit, OnDestroy {
+  timer$: Observable<number> = of(0);
+  destroy$: Subject<void> = new Subject();
+  constructor(private readonly configService: ConfigService) {}
+
+  ngOnInit(): void {
+    this.timer$ = timer(1000, 1000);
+
+    this.configService
+      .getLang()
+      .pipe(takeUntil(this.destroy$), first())
+      .subscribe(lang => {
+        console.log("childOne", { lang });
+      });
+  }
+
+  ngOnDestroy(): void {
+    console.log("destroy child one component");
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+}
+```

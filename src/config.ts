@@ -130,8 +130,14 @@ export const SOCIALS: SocialObjects = [
   },
   {
     name: "Mastodon",
-    href: "https://github.com/satnaing/astro-paper",
+    href: "https://hachyderm.io/@JoanSerna",
     linkTitle: `${SITE.title} on Mastodon`,
-    active: false,
+    active: true,
+  },
+  {
+    name: "Bluesky",
+    href: "https://bsky.app/profile/joansernaleiton.com",
+    linkTitle: `${SITE.title} on Bluesky`,
+    active: true,
   },
 ];

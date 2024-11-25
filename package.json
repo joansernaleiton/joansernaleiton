@@ -26,7 +26,7 @@
     "sanitize-html": "^2.13.1",
     "satori": "^0.10.14",
     "tailwindcss": "^3.4.14",
-    "typescript": "^5.6.3"
+    "typescript": "^5.7.2"
   },
   "devDependencies": {
     "@astrojs/react": "^3.6.3",
